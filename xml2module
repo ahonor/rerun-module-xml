@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+
+set -eu
+
+# Process options
+(( $# != 1 )) && {
+    echo >&2 'usage: $0 module.xml'
+    exit 2
+}
+MODULE_XML=$1
+
+if [[ ! -f "$MODULE_XML" ]]
+then
+    echo >&2 "File not found: $MODULE_XML"
+    exit 1
+fi
+
+# Check xmlstarlet is available
+if ! which xmlstarlet 2>&1 >/dev/null
+then
+    echo >&2 "Requires xmlstarlet"
+    exit 1
+fi
+# Validate module specification is valid XML
+if ! xmlstarlet val -q "$MODULE_XML"
+then
+    echo >&2 "XML file was invalid: $MODULE_XML"
+    exit 1
+fi
+
+# Helpers
+die() {
+    echo >&2 "$*"
+    exit 1
+}
+
+xmlsel() {
+    xmlstarlet sel -t -m $* $MODULE_XML
+}
+
+ok() {
+    echo -e "\033[32m[OK]\033[0m"
+}
+
+# module directory must be set because post processing requires it.
+[[ -z "${RERUN_MODULES:-}" ]] && { die "RERUN_MODULES environment variable not set"; }
+
+#
+# Create the module using the module metadata from specification
+#
+module=$(xmlsel "/module" -v @name)     || { die "/module/@name is a required attribute"; }
+desc=$(xmlsel "/module" -v description) || { die "/module/description is a required element"; }
+version=$(xmlsel "/module" -v @version) || { die "/module/@version is a required attribute"; }
+license=$(xmlsel "/module" -v license)  || :
+shell=$(xmlsel "/module" -v @shell)     || :
+requires=$(xmlsel "/module" -v @requires)   || :
+externals=$(xmlsel "/module" -v @externals) || :
+
+rerun stubbs:add-module --module $module --description "$desc" >/dev/null
+echo "$module: $(ok)"
+
+# Rewrite module metadata with input from specification
+sed -i .bak \
+    -e 's/SHELL=.*/SHELL="$shell"/g' \
+    -e 's/VERSION=.*/VERSION="$version"/g' \
+    -e 's/REQUIRES=.*/REQUIRES="$requires"/g' \
+    -e 's/EXTERNALS=.*/EXTERNALS="$externals"/g' \
+    -e 's/LICENSE=.*/LICENSE="$license"/g' \
+    $RERUN_MODULES/$module/metadata 
+
+#
+# Create the module's commands
+#
+commands=( $(xmlsel "/module/commands/command" -v @name -n) ) || :
+echo "... Adding ${#commands[*]:-} commands: ${commands[*]:-}"
+
+for command in ${commands[*]:-}
+do
+
+    echo -n "$module:$command "
+    description=$(xmlsel "/module/commands/command[@name='$command']" -v description) || :
+
+    rerun stubbs:add-command --module $module --description "${description:-no description}" --command $command \
+        --overwrite true >/dev/null
+
+    # Rewrite the command script using the implemenation from module specification
+    script=$RERUN_MODULES/$module/commands/$command/script
+    cp $script $script.bak
+
+    begin_line=$(grep -n -e '# Put the command implementation here.' $script | cut -d : -f 1)
+    cat > $script.$$ <<EOF 
+$(head -n $begin_line $script)
+# - - -
+$(xmlsel "/module/commands/command[@name='$command']" -v script)
+
+#
+exit \$?
+EOF
+    mv $script.$$ $script
+    echo "$(ok)"
+
+    #
+    # Generate the command's options
+    #
+    options=($(xmlsel "/module/commands/command[@name='$command']" -v options)) || :
+    for option in ${options[*]/,/ }
+    do
+        echo -n "$module:$command --$option "
+
+        opt_description=$(xmlsel "/module/options/option[@name='$option']" -v description) || :
+        opt_required=$(xmlsel "/module/options/option[@name='$option']" -v @required)      || :
+        opt_arguments=$(xmlsel "/module/options/option[@name='$option']" -v @arguments)    || :
+        opt_long=$(xmlsel "/module/options/option[@name='$option']" -v @long)       || :
+        opt_default=$(xmlsel "/module/options/option[@name='$option']" -v @default) || :
+        opt_export=$(xmlsel "/module/options/option[@name='$option']" -v @export)   || :
+
+        rerun stubbs:add-option --module $module --command $command --option $option \
+            --description "${opt_description:-no description}" \
+            --arg ${opt_arguments:-true} --default "${opt_default:-\"\"}" --export ${opt_export:-false} \
+            --long ${opt_long:-$option} --required ${opt_required:-false} >/dev/null 
+
+        echo "$(ok)"
+    done
+done
+
+
+#
+# Print a listing
+# 
+#rerun -M $RERUN_MODULES $module
+
+
+
+# Done.
+exit $?

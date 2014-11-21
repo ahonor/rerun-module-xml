@@ -1,0 +1,32 @@
+
+<module name="bintray-fun" shell="bash" version="1.1.0" requires="sh" > 
+	<description>uploads the file</description>
+	<license>apl 2.0</license>
+	<commands>
+		<command name="deb">
+			<description>publish debian packages to bintray</description>
+			<options>apikey, file</options>
+			<script>echo $FILE -key $APIKEY</script>
+		</command>
+		<command name="rpm">
+			<description>publish RPM packages to bintray</description>
+			<options>apikey, file</options>
+			<script>rpm $@</script>
+		</command>
+		<command name="zip">
+			<description>publish Zip packages to bintray</description>
+			<options>apikey, file</options>
+			<script><![CDATA[
+if ! package_create $FILE 
+then
+echo "failed" 
+fi]]></script>
+		</command>
+     </commands>
+     <options>
+	     <option name="apikey" required="true" arguments="true" 
+                 short="" long="msg" default="hi" export="false">
+		     <description>act as a password for REST authentication</description>
+	     </option>
+      </options>
+</module>
