@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<module name="waitfor" version="1.0.1">
+  <description>utility commands that wait for a condition.</description>
+  <commands>
+    <command name="ping">
+      <description>wait for ping response from host</description>
+      <options>host, interval</options>
+      <script><![CDATA[
+until ( ping -c 1 $HOST | grep -q ^64 )
+do
+   sleep $INTERVAL
+   echo Pinging $HOST...
+done
+
+echo "OK: $HOST is pingable."]]></script>
+    </command>
+  </commands>
+  <options>
+    <option name="host" required="true" arguments="true">
+      <description>seconds between checks</description>
+    </option>
+    <option name="interval" default="30">
+      <description>the host to reach</description>
+    </option>
+  </options>
+</module>

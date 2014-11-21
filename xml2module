@@ -111,13 +111,21 @@ EOF
         opt_required=$(xmlsel "/module/options/option[@name='$option']" -v @required)      || :
         opt_arguments=$(xmlsel "/module/options/option[@name='$option']" -v @arguments)    || :
         opt_long=$(xmlsel "/module/options/option[@name='$option']" -v @long)       || :
+        opt_short=$(xmlsel "/module/options/option[@name='$option']" -v @short)     || :
         opt_default=$(xmlsel "/module/options/option[@name='$option']" -v @default) || :
         opt_export=$(xmlsel "/module/options/option[@name='$option']" -v @export)   || :
 
+        [[ -z "${opt_arguments}" && -n "${opt_default}" ]] && opt_arguments=true
+
+        clops=( --arg ${opt_arguments:-false} --export ${opt_export:-false}
+            --long ${opt_long:-$option} --required ${opt_required:-false} )
+        [[ -n ${opt_short:-} ]] && clops=( --short ${opt_short} ${clops[*]} )
+
         rerun stubbs:add-option --module $module --command $command --option $option \
             --description "${opt_description:-no description}" \
-            --arg ${opt_arguments:-true} --default "${opt_default:-\"\"}" --export ${opt_export:-false} \
-            --long ${opt_long:-$option} --required ${opt_required:-false} >/dev/null 
+            ${clops[*]} >/dev/null <<EOF
+${opt_default:-}
+EOF
 
         echo "$(ok)"
     done
