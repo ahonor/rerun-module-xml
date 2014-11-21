@@ -1,3 +1,6 @@
+Tired of executing invidvidual stubbs commands?
+Want a single file that specifies the whole module?
+
 This utility reads a rerun module specification defined in XML
 and generates all the module code via stubbs command executions.
 
@@ -53,8 +56,6 @@ $ rerun waitfor
 Available commands in module, "waitfor":
 ping: "wait for ping response from host"
     --host <"">: "seconds between checks"
-   [ --interval <30>]: "the host to reach"
-seconds: "wait for specified seconds"
    [ --interval <30>]: "the host to reach"
 ```
 Run the command
